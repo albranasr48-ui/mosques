@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أقرب مسجد - ليبيا</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet CSS for Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Cairo -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; }
+        #map { height: 450px; width: 100%; border-radius: 0.75rem; }
+        /* تعديل تصميم لوحة الإرشادات الخاصة بالمسار لتناسب اللغة العربية */
+        .leaflet-routing-container { background-color: #1e293b !important; color: #f8fafc !important; font-family: 'Cairo', sans-serif !important; border-radius: 0.75rem !important; padding: 10px !important; }
+        .leaflet-routing-container h2, .leaflet-routing-container h3 { color: #34d399 !important; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-emerald-800 shadow-lg py-4 px-6">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="bg-emerald-700 p-2 rounded-xl text-emerald-200 text-2xl">
+                    <i class="fa-solid fa-mosque"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold">مساجد ليبيا</h1>
+                    <p class="text-xs text-emerald-200">حدد موقعك وابحث عن أقرب مسجد</p>
+                </div>
+            </div>
+            <button onclick="getCurrentLocation()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1 shadow">
+                <i class="fa-solid fa-location-crosshairs"></i> تحديث موقعي
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-6 flex-grow max-w-4xl space-y-6">
+        
+        <!-- Status & Search Bar Box -->
+        <div class="bg-slate-800 p-4 rounded-2xl shadow-md border border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div id="statusText" class="text-sm text-emerald-400 flex items-center gap-2">
+                <i class="fa-solid fa-circle-notch fa-spin"></i> جاري تحديد موقعك الجغرافي تلقائياً...
+            </div>
+            <button id="searchBtn" onclick="searchNearbyMosques()" class="w-full md:w-auto bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-bold transition flex items-center justify-center gap-2 shadow-lg opacity-55 cursor-not-allowed" disabled>
+                <i class="fa-solid fa-magnifying-glass-location"></i> ابحث عن أقرب المساجد
+            </button>
+        </div>
+
+        <!-- Mosques Results List -->
+        <div class="bg-slate-800 rounded-2xl p-4 shadow-lg border border-slate-700">
+            <h3 class="font-bold text-lg mb-4 text-slate-200 border-b border-slate-700 pb-2 flex justify-between items-center">
+                <span>المساجد القريبة المتاحة</span>
+                <span id="mosqueCount" class="text-xs bg-slate-900 text-emerald-400 px-2.5 py-1 rounded-lg border border-slate-700">0 مساجد</span>
+            </h3>
+            <div id="mosquesList" class="space-y-3 max-h-72 overflow-y-auto pl-1">
+                <div class="text-center text-slate-500 py-6">اضغط على زر البحث بعد اكتمال تحديد موقعك لإظهار المساجد.</div>
+            </div>
+        </div>
+
+        <!-- Map Container -->
+        <div class="bg-slate-800 p-2 rounded-2xl shadow-lg border border-slate-700">
+            <div class="px-3 py-2 text-xs text-slate-400 font-semibold flex items-center gap-2">
+                <i class="fa-solid fa-map-location-dot text-emerald-400"></i> خريطة التتبع والمسار المباشر للذهاب للمسجد
+            </div>
+            <div id="map"></div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-800 border-t border-slate-700 py-4 text-center text-xs text-slate-400 mt-auto">
+        جميع الحقوق محفوظة © مساجد ليبيا
+    </footer>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Routing Machine JS -->
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    <script>
+        let map, userMarker;
+        let userLat = null, userLng = null;
+        let mosqueMarkers = [];
+        let routingControl = null;
+        let fetchedMosques = [];
+
+        // حساب المسافة الدقيقة (Haversine formula)
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // بالامتار
+            const φ1 = lat1 * Math.PI/180;
+            const φ2 = lat2 * Math.PI/180;
+            const Δφ = (lat2-lat1) * Math.PI/180;
+            const Δλ = (lon2-lon1) * Math.PI/180;
+
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+            return R * c; 
+        }
+
+        // تهيئة الخريطة عند أول تحديد للموقع
+        function initMap(lat, lng) {
+            if (!map) {
+                map = L.map('map').setView([lat, lng], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+            } else {
+                map.setView([lat, lng], 15);
+            }
+
+            if (userMarker) {
+                userMarker.setLatLng([lat, lng]);
+            } else {
+                userMarker = L.marker([lat, lng], {
+                    icon: L.divIcon({
+                        className: 'custom-user-marker',
+                        html: '<div style="background-color: #3b82f6; width: 18px; height: 18px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px #3b82f6;"></div>',
+                        iconSize: [18, 18]
+                    })
+                }).addTo(map).bindPopup("<b>موقعك الحالي</b>").openPopup();
+            }
+        }
+
+        // جلب الموقع الجغرافي فور فتح الموقع تلقائياً
+        function getCurrentLocation() {
+            const statusText = document.getElementById('statusText');
+            const searchBtn = document.getElementById('searchBtn');
+
+            statusText.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-emerald-400"></i> جاري تحديث وتحديد موقعك...`;
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLat = position.coords.latitude;
+                        userLng = position.coords.longitude;
+                        
+                        statusText.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> تم تحديد موقعك بنجاح وجاهز للبحث.`;
+                        searchBtn.disabled = false;
+                        searchBtn.classList.remove('opacity-55', 'cursor-not-allowed');
+
+                        initMap(userLat, userLng);
+                    },
+                    (error) => {
+                        statusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow-400"></i> تعذر الوصول لموقعك تلقائياً، يرجى السماح للمتصفح بالصلاحية.`;
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            } else {
+                statusText.innerHTML = `متصفحك لا يدعم تحديد الموقع.`;
+            }
+        }
+
+        // عند الضغط على زر البحث
+        async function searchNearbyMosques() {
+            if (!userLat || !userLng) {
+                alert("يرجى انتظار تحديد موقعك أولاً!");
+                return;
+            }
+
+            const statusText = document.getElementById('statusText');
+            statusText.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin text-emerald-400"></i> جاري البحث عن المساجد القريبة منك...`;
+
+            // نطاق البحث 5 كيلومترات
+            const radius = 5000;
+            const query = `
+                [out:json][timeout:25];
+                (
+                  node["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${userLat},${userLng});
+                  way["amenity"="place_of_worship"]["religion"="muslim"](around:${radius},${userLat},${userLng});
+                );
+                out body;
+                >;
+                out skel qt;
+            `;
+
+            const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                fetchedMosques = [];
+                data.elements.forEach(el => {
+                    let mLat = el.lat;
+                    let mLng = el.lon;
+                    if (!mLat && el.center) {
+                        mLat = el.center.lat;
+                        mLng = el.center.lon;
+                    }
+
+                    if (mLat && mLng) {
+                        const name = (el.tags && (el.tags.name || el.tags['name:ar'])) || "مسجد بدون اسم";
+                        fetchedMosques.push({ name, lat: mLat, lng: mLng });
+                    }
+                });
+
+                displayMosquesResults();
+                statusText.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> تم العثور على المساجد القريبة بنجاح.`;
+
+            } catch (e) {
+                console.error(e);
+                statusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow-400"></i> حدث خطأ أثناء جلب المساجد، تحقق من الإنترنت.`;
+            }
+        }
+
+        // عرض النتائج في القائمة
+        function displayMosquesResults() {
+            const listContainer = document.getElementById('mosquesList');
+            listContainer.innerHTML = '';
+
+            // مسح العلامات القديمة من الخريطة
+            mosqueMarkers.forEach(marker => map.removeLayer(marker));
+            mosqueMarkers = [];
+
+            if (fetchedMosques.length === 0) {
+                listContainer.innerHTML = `<div class="text-center text-slate-500 py-6">لا توجد مساجد قريبة في نطاق 5 كم.</div>`;
+                document.getElementById('mosqueCount').innerText = `0 مساجد`;
+                return;
+            }
+
+            // حساب المسافات وترتيب الأقرب فالأقرب
+            fetchedMosques.forEach(m => {
+                m.distance = calculateDistance(userLat, userLng, m.lat, m.lng);
+            });
+            fetchedMosques.sort((a, b) => a.distance - b.distance);
+
+            document.getElementById('mosqueCount').innerText = `${fetchedMosques.length} مساجد`;
+
+            fetchedMosques.forEach((mosque, index) => {
+                // وضع علامة المسجد على الخريطة
+                const mMarker = L.marker([mosque.lat, mosque.lng]).addTo(map)
+                    .bindPopup(`<b>${mosque.name}</b><br>المسافة: ${mosque.distance > 1000 ? (mosque.distance/1000).toFixed(2) + ' كم' : mosque.distance.toFixed(0) + ' متر'}`);
+                mosqueMarkers.push(mMarker);
+
+                const distFormatted = mosque.distance > 1000 ? (mosque.distance / 1000).toFixed(2) + ' كم' : mosque.distance.toFixed(0) + ' متر';
+                
+                const itemHTML = `
+                    <div class="bg-slate-900 p-3.5 rounded-xl border border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-emerald-500 transition">
+                        <div>
+                            <h4 class="font-bold text-base text-emerald-300">${mosque.name}</h4>
+                            <span class="text-xs text-slate-400"><i class="fa-solid fa-route ml-1"></i> المسافة: <strong class="text-white">${distFormatted}</strong></span>
+                        </div>
+                        <button onclick="startTrackingRoute(${mosque.lat}, ${mosque.lng}, '${mosque.name}')" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-bold transition flex items-center justify-center gap-2 shadow">
+                            <i class="fa-solid fa-diamond-turn-right"></i> تتبع الذهاب للمسجد
+                        </button>
+                    </div>
+                `;
+                listContainer.innerHTML += itemHTML;
+            });
+        }
+
+        // رسم شريط ومسار التتبع للذهاب للمسجد المحدد
+        function startTrackingRoute(destLat, destLng, destName) {
+            if (!userLat || !userLng) return;
+
+            // إذا كان هناك مسار قديم مرسوم على الخريطة، قم بإزالته
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+
+            // إضافة خط المسار وتوجيهات الخطوات للذهاب للمسجد
+            routingControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(userLat, userLng),
+                    L.latLng(destLat, destLng)
+                ],
+                routeWhileDragging: false,
+                language: 'ar',
+                showAlternatives: false,
+                fitSelectedRoutes: true,
+                lineOptions: {
+                    styles: [{ color: '#10b981', weight: 6, opacity: 0.8 }]
+                },
+                createMarker: function() { return null; } // منع إضافة علامات افتراضية مزعجة ونكتفي بالعلامات الأساسية
+            }).addTo(map);
+
+            // تمرير الخريطة لموقع المسجد وتنبيه المستخدم
+            map.setView([destLat, destLng], 17);
+        }
+
+        // تشغيل تحديد الموقع تلقائياً بمجرد فتح الصفحة
+        window.onload = () => {
+            getCurrentLocation();
+        };
+    </script>
+</body>
+</html>
