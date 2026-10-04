@@ -8,8 +8,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Leaflet CSS for Maps -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Leaflet Routing Machine CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts Cairo -->
@@ -17,9 +15,6 @@
     <style>
         body { font-family: 'Cairo', sans-serif; }
         #map { height: 450px; width: 100%; border-radius: 0.75rem; }
-        /* تعديل تصميم لوحة الإرشادات الخاصة بالمسار لتناسب اللغة العربية */
-        .leaflet-routing-container { background-color: #1e293b !important; color: #f8fafc !important; font-family: 'Cairo', sans-serif !important; border-radius: 0.75rem !important; padding: 10px !important; }
-        .leaflet-routing-container h2, .leaflet-routing-container h3 { color: #34d399 !important; }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
@@ -69,7 +64,7 @@
         <!-- Map Container -->
         <div class="bg-slate-800 p-2 rounded-2xl shadow-lg border border-slate-700">
             <div class="px-3 py-2 text-xs text-slate-400 font-semibold flex items-center gap-2">
-                <i class="fa-solid fa-map-location-dot text-emerald-400"></i> خريطة التتبع والمسار المباشر للذهاب للمسجد
+                <i class="fa-solid fa-map-location-dot text-emerald-400"></i> خريطة موقعك والمساجد المحيطة
             </div>
             <div id="map"></div>
         </div>
@@ -83,16 +78,13 @@
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Leaflet Routing Machine JS -->
-    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
     <script>
         let map, userMarker;
         let userLat = null, userLng = null;
         let mosqueMarkers = [];
-        let routingControl = null;
         let fetchedMosques = [];
 
-        // حساب المسافة الدقيقة (Haversine formula)
+        // حساب المسافة بدقة (Haversine formula)
         function calculateDistance(lat1, lon1, lat2, lon2) {
             const R = 6371e3; // بالامتار
             const φ1 = lat1 * Math.PI/180;
@@ -108,7 +100,7 @@
             return R * c; 
         }
 
-        // تهيئة الخريطة عند أول تحديد للموقع
+        // تهيئة الخريطة
         function initMap(lat, lng) {
             if (!map) {
                 map = L.map('map').setView([lat, lng], 15);
@@ -132,7 +124,7 @@
             }
         }
 
-        // جلب الموقع الجغرافي فور فتح الموقع تلقائياً
+        // جلب الموقع الجغرافي فور فتح الموقع
         function getCurrentLocation() {
             const statusText = document.getElementById('statusText');
             const searchBtn = document.getElementById('searchBtn');
@@ -145,14 +137,14 @@
                         userLat = position.coords.latitude;
                         userLng = position.coords.longitude;
                         
-                        statusText.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> تم تحديد موقعك بنجاح وجاهز للبحث.`;
+                        statusText.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> تم تحديد موقعك بنجاح، جاهز للبحث.`;
                         searchBtn.disabled = false;
                         searchBtn.classList.remove('opacity-55', 'cursor-not-allowed');
 
                         initMap(userLat, userLng);
                     },
                     (error) => {
-                        statusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow-400"></i> تعذر الوصول لموقعك تلقائياً، يرجى السماح للمتصفح بالصلاحية.`;
+                        statusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow-400"></i> تعذر الوصول لموقعك، تأكد من تفعيل الـ GPS والسماح للمتصفح.`;
                     },
                     { enableHighAccuracy: true, timeout: 10000 }
                 );
@@ -164,7 +156,7 @@
         // عند الضغط على زر البحث
         async function searchNearbyMosques() {
             if (!userLat || !userLng) {
-                alert("يرجى انتظار تحديد موقعك أولاً!");
+                alert("يرجى الانتظار حتى يتم تحديد موقعك أولاً!");
                 return;
             }
 
@@ -210,16 +202,16 @@
 
             } catch (e) {
                 console.error(e);
-                statusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow-400"></i> حدث خطأ أثناء جلب المساجد، تحقق من الإنترنت.`;
+                statusText.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow-400"></i> حدث خطأ أثناء الاتصال بالخريطة، تحقق من اتصالك بالإنترنت.`;
             }
         }
 
-        // عرض النتائج في القائمة
+        // عرض النتائج في القائمة وتحديث الخريطة بالعلامات
         function displayMosquesResults() {
             const listContainer = document.getElementById('mosquesList');
             listContainer.innerHTML = '';
 
-            // مسح العلامات القديمة من الخريطة
+            // مسح العلامات القديمة
             mosqueMarkers.forEach(marker => map.removeLayer(marker));
             mosqueMarkers = [];
 
@@ -237,7 +229,7 @@
 
             document.getElementById('mosqueCount').innerText = `${fetchedMosques.length} مساجد`;
 
-            fetchedMosques.forEach((mosque, index) => {
+            fetchedMosques.forEach((mosque) => {
                 // وضع علامة المسجد على الخريطة
                 const mMarker = L.marker([mosque.lat, mosque.lng]).addTo(map)
                     .bindPopup(`<b>${mosque.name}</b><br>المسافة: ${mosque.distance > 1000 ? (mosque.distance/1000).toFixed(2) + ' كم' : mosque.distance.toFixed(0) + ' متر'}`);
@@ -245,51 +237,36 @@
 
                 const distFormatted = mosque.distance > 1000 ? (mosque.distance / 1000).toFixed(2) + ' كم' : mosque.distance.toFixed(0) + ' متر';
                 
+                // رابط الانتقال لخرائط جوجل للحصول على التوجيه والمسار بدقة تامة
+                const googleMapsDirUrl = `https://www.google.com/maps/dir/?api=1&destination=${mosque.lat},${mosque.lng}`;
+
                 const itemHTML = `
                     <div class="bg-slate-900 p-3.5 rounded-xl border border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-emerald-500 transition">
                         <div>
                             <h4 class="font-bold text-base text-emerald-300">${mosque.name}</h4>
                             <span class="text-xs text-slate-400"><i class="fa-solid fa-route ml-1"></i> المسافة: <strong class="text-white">${distFormatted}</strong></span>
                         </div>
-                        <button onclick="startTrackingRoute(${mosque.lat}, ${mosque.lng}, '${mosque.name}')" class="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-bold transition flex items-center justify-center gap-2 shadow">
-                            <i class="fa-solid fa-diamond-turn-right"></i> تتبع الذهاب للمسجد
-                        </button>
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <button onclick="focusOnMap(${mosque.lat}, ${mosque.lng})" class="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-700 border border-slate-600 text-emerald-400 text-xs px-3 py-2 rounded-xl font-bold transition flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-map-pin"></i> عرض بالخريطة
+                            </button>
+                            <a href="${googleMapsDirUrl}" target="_blank" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-bold transition flex items-center justify-center gap-2 shadow">
+                                <i class="fa-solid fa-diamond-turn-right"></i> تتبع الذهاب للمسجد
+                            </a>
+                        </div>
                     </div>
                 `;
                 listContainer.innerHTML += itemHTML;
             });
         }
 
-        // رسم شريط ومسار التتبع للذهاب للمسجد المحدد
-        function startTrackingRoute(destLat, destLng, destName) {
-            if (!userLat || !userLng) return;
-
-            // إذا كان هناك مسار قديم مرسوم على الخريطة، قم بإزالته
-            if (routingControl) {
-                map.removeControl(routingControl);
-            }
-
-            // إضافة خط المسار وتوجيهات الخطوات للذهاب للمسجد
-            routingControl = L.Routing.control({
-                waypoints: [
-                    L.latLng(userLat, userLng),
-                    L.latLng(destLat, destLng)
-                ],
-                routeWhileDragging: false,
-                language: 'ar',
-                showAlternatives: false,
-                fitSelectedRoutes: true,
-                lineOptions: {
-                    styles: [{ color: '#10b981', weight: 6, opacity: 0.8 }]
-                },
-                createMarker: function() { return null; } // منع إضافة علامات افتراضية مزعجة ونكتفي بالعلامات الأساسية
-            }).addTo(map);
-
-            // تمرير الخريطة لموقع المسجد وتنبيه المستخدم
-            map.setView([destLat, destLng], 17);
+        // تحريك الخريطة وتركيزها على المسجد المطلوب
+        function focusOnMap(lat, lng) {
+            map.setView([lat, lng], 17);
+            window.scrollTo({ top: document.getElementById('map').offsetTop - 20, behavior: 'smooth' });
         }
 
-        // تشغيل تحديد الموقع تلقائياً بمجرد فتح الصفحة
+        // التشغيل التلقائي عند تحميل الصفحة
         window.onload = () => {
             getCurrentLocation();
         };
